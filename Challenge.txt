@@ -1,0 +1,23 @@
+﻿Challenge - Prosegur – GAP / AMP: 
+Consigna: 
+Supongamos que estás trabajando en Starbucks y debemos te piden realizar un sistema de 
+gestión de pedidos. 
+ Este sistema debe de gestionar los pedidos realizados por los usuarios y generar una 
+especie de comanda para que sea resueltos por la cocina. 
+ Cada ítem del pedido tiene su tiempo de realización y uso de materiales más su precio, 
+contemplando los diferentes impuestos de cada una de nuestras provincias. 
+Técnico: 
+//1. Crear una aplicación de MVC en netcore6 + uso de Javascript o Typescript para 
+comunicación asincrónicas. El frontend puede ser angular/react/vue/blazor/jquery + api rest 
+1.1. puede usar las siguente lib de cliente: bootstrap, jquery, lexon.js 
+1.2. Incorporar en el proyecto. 
+2. Crear Assembly de dominio donde implemente DDD + Test Unitiarios 
+ La solución deberá contener 
+// Un mínimo de 5 entidades de dominio:. 
+// Se valorará que el diseño contemple un maestro-detalle. 
+// Una entidad relación muchos a muchos. 
+// Una entidad compleja. 
+//3. Crear capa de datos en efcore6 (code first) bien simple. 
+Notas: se valorará el uso correcto del framework de net Core, uso y aplicación de herramientas 
+de diagnóstico y buenas prácticas de diseños. 
+Subir el código a un Repo de Github.

@@ -1,0 +1,26 @@
+{
+  "success": 0,
+  "message": "SE INGRESARON 1 REGISTROS",
+  "data": {
+    "datehour": "2023-10-24T10:30:00",
+    "country": "Argentina",
+    "city": "Monte Grande",
+    "lat": "15.20",
+    "lon": "97.33",
+    "temp": "30",
+    "feels_like": "38",
+    "id": 5
+  },
+  "httpResponseMessage": {
+    "version": "1.1",
+    "content": {
+      "headers": []
+    },
+    "statusCode": 200,
+    "reasonPhrase": "OK",
+    "headers": [],
+    "trailingHeaders": [],
+    "requestMessage": null,
+    "isSuccessStatusCode": true
+  }
+}

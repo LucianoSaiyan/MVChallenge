@@ -1,0 +1,414 @@
+﻿@page "/weather"
+@using Project.Entities.Model;
+@using Project.Shared
+@using Project.Shared.DTOs;
+@using Project.Shared.Domain;
+@using System.Diagnostics;
+@using System.Text.Json.Serialization;
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject ApiSettings apisettings
+
+<div class="container">
+    <div class="row">
+        <div class="col-10">
+            <div class="col-md-6 align-items-center d-flex">
+            <p>Seleccione una Ciudad</p>
+            </div>
+            <div class="col-md-6 align-items-center d-flex">
+            <span>
+                <select @bind="citie_selected">
+                    @foreach (var cities in CiudadesDropdown.DatacitiesList)
+                    {
+                        <option value="@cities.city">@cities.city</option>
+                    }
+                </select>
+            </span>
+            </div>
+        </div>
+        <div class="col-6">
+            <p>Ciudad seleccionada: @Citie_Selected?.city</p>
+            <p>Longitud: @Citie_Selected?.longitud</p>
+            <p>Latitud: @Citie_Selected?.latitud</p>
+        </div>
+    </div>
+    @if (EnableButtonGetDataCity)
+    {
+        <div class="col-12">
+            <div class="btn btn-info">
+                <button @onclick="GetDataFromExternalAPI">
+                    <span class="oi oi-arrow-left mr-2" aria-hidden="true">Obtener informacion de la Ciudad @Citie_Selected?.city</span>
+                </button>
+            </div>
+        </div>
+    }
+    <p>@BuscandoInformacion</p>
+    &nbsp;&nbsp;
+    @if (nuevainformacion)
+    {
+        <div class="col-12">
+            <div class="col-12">
+                <div class="btn btn-primary">
+                    <button @onclick="UpdateInformacion">
+                        <span class="oi oi-chat" aria-hidden="true">
+                            Actualizar Informacion Recibida de la Ciudad @Citie_Selected?.city en la base de datos
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+    <span>
+        <p>@UpdatedInformacion</p>
+    </span>
+    &nbsp;
+    @if (!String.IsNullOrEmpty(citie_selected))
+    {
+        <div class="col-10">
+            <label>
+                <input type="checkbox" @onchange="CambiarEstadoCheckbox" />
+                <span class="oi oi-check mr-2" aria-hidden="true">
+                    Obtener Historico de @Citie_Selected?.city
+                </span>
+            </label>
+        </div>
+    }
+
+
+@if (ShowInformation)
+{
+    @if (OpenWeatherModelDTOArrayResponse == null)
+    {
+            <p><em>@MessageList</em></p>
+    }
+    else if (OpenWeatherModelDTOArrayResponse.Length == 0)
+    {
+            <p><em>@MessageList</em></p>
+    }
+    else
+    {
+        <div class="col-10">
+            <table class="table">
+                <thead>
+                    <tr>
+                        @* propiedades que se cargan del metodo Methods.GetProperties_from_Generic_Object_Exclude_id_Async *@
+                        @for (int i = 0; i < propertyInfos.Length; i++)
+                        {
+                            <th>@propertyInfos[i].Name</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var dataweather in OpenWeatherModelDTOArrayResponse)
+                    {
+                        <tr>
+                            <td>@dataweather.datehour</td>
+                            <td>@dataweather.country</td>
+                            <td>@dataweather.city</td>
+                            <td>@dataweather.lat</td>
+                            <td>@dataweather.lon</td>
+                            <td>@dataweather.temp</td>
+                            <td>@dataweather.feels_like</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@if (Error != null)
+{
+    <p><em>@Error</em></p>
+}
+</div>
+
+@code {
+
+    #region Variables Inicializador
+    public string MessageList { get; set; }
+    OpenWeatherEntity[]? OpenWeatherArrayResponse;
+    OpenWeatherEntity? OpenWeatherResponse;
+    private string Error { get; set; }
+    private string Demora { get; set; }
+    private PropertyInfo[] propertyInfos { get; set; }
+    private ResponseService<object> responseService { get; set; }
+    OpenWeatherModelDTO[]? OpenWeatherModelDTOArrayResponse;
+    OpenWeatherModelDTO? OpenWeatherModelDTOResponse;
+    // private ApiSettings apiSettings;
+    #endregion
+
+    #region Mostrar/Ocultar informacion
+
+    private bool ShowInformation { get; set; } = true;
+    //propiedad que se utiliza para mostrar el boton de actualizar el servicio
+    private bool EnableButtonGetDataCity { get; set; } = false;
+    #endregion
+
+    #region CheckBox
+
+    private bool isChecked = false;
+
+    private async Task CambiarEstadoCheckbox(ChangeEventArgs e)
+    {
+        isChecked = (bool)e.Value;
+        if (isChecked)
+            await GetWeatherApiAsync();
+        else
+            OpenWeatherModelDTOArrayResponse = null;
+    }
+
+    #endregion
+
+    #region Metodos Carga de Pagina
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            //se obtienen las propiedades del modelo para encabezado de la lista
+            propertyInfos = await Methods.GetProperties_from_Generic_Object_Exclude_id_Async<OpenWeatherModelDTO>(new OpenWeatherModelDTO());
+        }
+        catch (Exception ex)
+        {
+            Error = ex.ToString();
+        }
+    }
+
+    #endregion
+
+    #region Boton busca informacion Open Weather
+
+    private string texto = "";
+
+    private void UpdateText(ChangeEventArgs e)
+    {
+        texto = e.Value.ToString();
+    }
+
+    //propiedad que se incluye en los tags de html para mostrar que se esta buscando informacion externa
+    private string BuscandoInformacion { get; set; }
+    private async Task GetDataFromExternalAPI()
+    {        
+        SetVariables(true);
+        await GetWeatherExternalApiAsync();
+        SetVariables(false);     
+    }
+
+    void SetVariables(bool startcall)
+    {
+        EnableButtonGetDataCity = !startcall;
+        //mensaje que indica que se esta buscando informacion
+        BuscandoInformacion = startcall ? $"Buscando Informacion de la Ciudad {Citie_Selected.city} de la API de OpenWeather" : string.Empty;
+    }
+
+    #endregion
+
+    #region URLS API 
+    //se entiende que pueden armarse en otra clase en la que los cuales varios componentes la puedan invocar
+
+    string CombineExternalApiUrl(string lat, string lon, string exclude)
+        => $"{apisettings.ExternalApiUrl}?lat={lat}&lon={lon}&exclude={exclude}&appid={apisettings.ApiKey}";
+
+    string LocalApiUrl()
+        => $"{apisettings.BackEndApiUrl}OpenWeather";
+
+    #endregion
+
+    #region Dropdown Cities
+
+    private string citie_selected;
+
+    private CiudadesDropdown Citie_Selected
+    {
+        get
+        {
+            CiudadesDropdown getcity = CiudadesDropdown.DatacitiesList.FirstOrDefault(p => p.city == citie_selected);
+            EnableButtonGetDataCity = !String.IsNullOrEmpty(getcity?.city);
+            //se agrega esta condicion para que deshabilite el boton de actualizar datos en caso de haberse mostrado al traer informacion
+            if (nuevainformacion && String.IsNullOrEmpty(getcity?.city))
+            {   
+                nuevainformacion = false;
+                OpenWeatherModelDTOArrayResponse = null;
+            }
+
+            if ((OpenWeatherModelDTOArrayResponse != null && String.IsNullOrEmpty(getcity?.city)))
+                OpenWeatherModelDTOArrayResponse = null;
+            return getcity;
+
+        }
+    }
+
+    public class CiudadesDropdown
+    {
+        #region Ciudades 
+        public string latitud { get; set; }
+        public string longitud { get; set; }
+        public string city { get; set; }
+
+        //llenar con informacion de la base de datos
+        public static List<CiudadesDropdown> DatacitiesList = new List<CiudadesDropdown>()
+        {
+            new CiudadesDropdown { city = string.Empty },
+            new CiudadesDropdown { city = "Buenos Aires/Argentina" , latitud = "33.44" , longitud = "94.04" },
+            new CiudadesDropdown { city = "Monte Grande/Argentina" , latitud = "-34.81" , longitud = "-58.46" },
+            new CiudadesDropdown { city = "London/England" , latitud = "51.5073219" , longitud = "-0.1276474"  },
+            new CiudadesDropdown { city = "Chelsea/England" , latitud = "33.44" , longitud = "-0.1687007"},
+            new CiudadesDropdown { city = "Chicago/US"  , latitud = "33.44" , longitud = "-94.04"  }
+        };
+        #endregion
+    }
+
+    #endregion
+
+    #region Call Service Weather
+
+    bool nuevainformacion = false;
+
+    /// <summary>
+    /// metodo que invoca la api externa con la informacion que se obtiene de
+    /// </summary>
+    /// <param name="repeatcall"></param>
+    /// <returns></returns>
+    async Task GetWeatherExternalApiAsync(object repeatcall = null)
+    {
+        try
+        {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            //invocar servicio externo para obtener la informacion
+            string urlforcall = CombineExternalApiUrl(Citie_Selected?.latitud, Citie_Selected?.longitud, "hourly,daily");
+            String rrresponseService = await Http.GetStringAsync(urlforcall);
+            var OpenWeatherResponseService = JsonConvert.DeserializeObject<OpenWeather>(rrresponseService);
+            if (OpenWeatherResponseService != null)
+            {
+                nuevainformacion = true;
+                openWeatherEntityToPut = mapperOpenWeatherToOpenWeatherEntity(OpenWeatherResponseService);
+                UpdatedInformacion = $"Se obtuvo informacion de la Ciudad {Citie_Selected.city}";
+            }
+            else
+            {
+                Error = repeatcall == null ? Error : "";
+            }
+            stopwatch.Stop();
+            Demora = $"TotalSeconds : {stopwatch.Elapsed.TotalSeconds} --- TotalMilliseconds : {stopwatch.Elapsed.TotalMilliseconds}";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Invoca el Get del Server
+    /// </summary>
+    /// <param name="repeatcall"></param>
+    /// <returns></returns>
+    async Task GetWeatherApiAsync(object repeatcall = null)
+    {
+        try
+        {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            //valida que haya una seleccion valida en el dropdown de ciudades
+            if (!String.IsNullOrEmpty(Citie_Selected?.city))
+            {
+                UpdatedInformacion = $"Aguarde por favor,buscando Historicos de la Ciudad {Citie_Selected.city}";
+                string[] splitedCiudadPais = splitcountry(Citie_Selected.city);
+                string urllost = $"{LocalApiUrl()}/city/{splitedCiudadPais[0]}";
+                //invocacion a la api Local
+                string responseService = await Http.GetStringAsync(urllost);
+                List<OpenWeatherModelDTO> apiOpenWeatherResponse =
+                        JsonConvert.DeserializeObject<ResponseService<List<OpenWeatherModelDTO>>>(await Http.GetStringAsync(urllost)).Data;
+
+                if (apiOpenWeatherResponse != null)
+                {
+                    await FillListToShow(apiOpenWeatherResponse);
+                }
+                UpdatedInformacion = string.Empty;
+            }
+            stopwatch.Stop();
+            Demora = $"TotalSeconds : {stopwatch.Elapsed.TotalSeconds} --- TotalMilliseconds : {stopwatch.Elapsed.TotalMilliseconds}";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.ToString();
+        }
+    }
+
+    private async Task FillListToShow(List<OpenWeatherModelDTO> apiOpenWeatherResponse)
+    {
+        // Ordenar la lista en orden descendente por datehour
+        apiOpenWeatherResponse = apiOpenWeatherResponse.OrderByDescending(d => d.datehour).ToList();
+        // Llenar OpenWeatherModelDTOArrayResponse con la lista ordenada
+        OpenWeatherModelDTOArrayResponse = apiOpenWeatherResponse.ToArray();
+    }
+
+
+    OpenWeatherEntity openWeatherEntityToPut = null;
+
+    /// <summary>
+    /// funcion que mapea la informacion recibida del servicio de openweather a un dto personalizado
+    /// </summary>
+    /// <param name="openWeather"></param>
+    /// <returns></returns>
+    OpenWeatherEntity mapperOpenWeatherToOpenWeatherEntity(OpenWeather openWeather)
+    {
+        openWeatherEntityToPut = new OpenWeatherEntity();
+        openWeatherEntityToPut.datehour = DateTime.Now;
+        string[] splitedCiudadPais = splitcountry(Citie_Selected.city);
+        openWeatherEntityToPut.city = splitedCiudadPais[0] ?? "";
+        openWeatherEntityToPut.country = splitedCiudadPais[1] ?? "";
+        openWeatherEntityToPut.lat = openWeather?.coord.lat.ToString();
+        openWeatherEntityToPut.lon = openWeather?.coord.lon.ToString();
+        openWeatherEntityToPut.temp = openWeather?.main.temp.ToString();
+        openWeatherEntityToPut.feels_like = openWeather?.main.feels_like.ToString();
+        return openWeatherEntityToPut;
+    }
+
+    //propiedad que se utiliza para mostrar mensaje de actualizacion de la informacion
+    private string UpdatedInformacion { get; set; }
+
+    /// <summary>
+    /// Actualiza la informacion que se recibio de la API OpenWeather a la API local
+    /// </summary>
+    /// <returns></returns>
+    private async Task UpdateInformacion()
+    {
+        try
+        {
+            HttpResponseMessage response = (await Http.PostAsJsonAsync<OpenWeatherEntity>(
+                                LocalApiUrl(),openWeatherEntityToPut));
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                UpdatedInformacion = $"Se actualizo la informacion de la Ciudad {splitcountry(Citie_Selected.city)[0]}";
+                await GetWeatherApiAsync();
+            }
+            else
+            {
+                UpdatedInformacion = response.ToString();
+            }
+
+            //se deshabilita el boton para que no se actualice nuevamente la informacion
+            nuevainformacion = !nuevainformacion;
+        }
+        catch (Exception ex)
+        {
+            UpdatedInformacion = ex.Message;
+            Error = ex.ToString();
+        }
+    }
+
+    /// <summary>
+    /// obtiene el valor seleccionado del dropdown de ciudades paises y los divide
+    /// </summary>
+    /// <param name="Citie_Selected"></param>
+    /// <returns></returns>
+    string[] splitcountry(string Citie_Selected)
+    {
+        string[] splitedCityCountry = Citie_Selected.Split('/');
+        return splitedCityCountry;
+    }
+    #endregion
+
+}
